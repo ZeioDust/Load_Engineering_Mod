@@ -1,0 +1,32 @@
+{
+  "display": {
+    "icon": {
+      "id": "loadbearing:reinforcing_grout"
+    },
+    "title": {
+      "translate": "advancements.loadbearing.it_held.title"
+    },
+    "description": {
+      "translate": "advancements.loadbearing.it_held.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "trigger": {
+      "trigger": "loadbearing:structural",
+      "conditions": {
+        "kind": "it_held"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "trigger"
+    ]
+  ],
+  "sends_telemetry_event": false,
+  "parent": "loadbearing:root"
+}

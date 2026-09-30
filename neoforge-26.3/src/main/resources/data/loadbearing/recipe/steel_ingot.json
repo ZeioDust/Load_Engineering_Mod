@@ -1,0 +1,5 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [ "minecraft:iron_ingot", "minecraft:iron_ingot", "minecraft:coal" ],
+  "result": { "id": "loadbearing:steel_ingot", "count": 2 }
+}
