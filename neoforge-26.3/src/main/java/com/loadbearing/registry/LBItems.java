@@ -5,7 +5,6 @@ import java.util.List;
 
 import com.loadbearing.LoadBearing;
 import com.loadbearing.item.ReinforcingGroutItem;
-import com.loadbearing.item.StressWandItem;
 
 import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.registries.DeferredItem;
@@ -17,10 +16,6 @@ public final class LBItems {
     private static final List<DeferredItem<? extends Item>> TAB_ORDER = new ArrayList<>();
 
     private LBItems() {}
-
-    public static final DeferredItem<StressWandItem> STRESS_WAND = tab(REGISTRY.registerItem(
-            "stress_wand", StressWandItem::new, p -> p.stacksTo(1).durability(256)));
-
     public static final DeferredItem<ReinforcingGroutItem> REINFORCING_GROUT = tab(REGISTRY.registerItem(
             "reinforcing_grout", ReinforcingGroutItem::new, p -> p.stacksTo(64)));
 

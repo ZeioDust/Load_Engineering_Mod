@@ -1,6 +1,0 @@
-{
-  "type": "minecraft:crafting_shaped",
-  "pattern": [ "  R", " S ", "S  " ],
-  "key": { "R": "minecraft:redstone", "S": "loadbearing:steel_ingot" },
-  "result": { "id": "loadbearing:stress_wand", "count": 1 }
-}
