@@ -1,0 +1,105 @@
+{
+  "stress_creak": {
+    "subtitle": "subtitles.loadbearing.stress_creak",
+    "sounds": [
+      {
+        "name": "minecraft:dig/wood1",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:dig/wood2",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:dig/wood3",
+        "type": "file"
+      }
+    ]
+  },
+  "crack_warning": {
+    "subtitle": "subtitles.loadbearing.crack_warning",
+    "sounds": [
+      {
+        "name": "minecraft:dig/stone1",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:dig/stone2",
+        "type": "file"
+      }
+    ]
+  },
+  "collapse_rumble": {
+    "subtitle": "subtitles.loadbearing.collapse_rumble",
+    "sounds": [
+      {
+        "name": "minecraft:random/explode1",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:random/explode2",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:random/explode3",
+        "type": "file"
+      }
+    ]
+  },
+  "debris_impact": {
+    "subtitle": "subtitles.loadbearing.debris_impact",
+    "sounds": [
+      {
+        "name": "minecraft:block/deepslate/break1",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:block/deepslate/break2",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:block/deepslate/break3",
+        "type": "file"
+      }
+    ]
+  },
+  "crane_motor": {
+    "subtitle": "subtitles.loadbearing.crane_motor",
+    "sounds": [
+      {
+        "name": "minecraft:tile/piston/out",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:tile/piston/in",
+        "type": "file"
+      }
+    ]
+  },
+  "concrete_pour": {
+    "subtitle": "subtitles.loadbearing.concrete_pour",
+    "sounds": [
+      {
+        "name": "minecraft:dig/sand1",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:dig/sand2",
+        "type": "file"
+      },
+      {
+        "name": "minecraft:dig/sand3",
+        "type": "file"
+      }
+    ]
+  },
+  "gauge_beep": {
+    "subtitle": "subtitles.loadbearing.gauge_beep",
+    "sounds": [
+      {
+        "name": "minecraft:random/click",
+        "type": "file"
+      }
+    ]
+  }
+}
