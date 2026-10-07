@@ -1,0 +1,98 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'fabric-loom' version '1.18.2'
+    id 'idea'
+}
+
+tasks.named('wrapper', Wrapper).configure {
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+// Set by the port to the Java version this Minecraft release ships to end users.
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    mappings files("mappings/identity-mappings.jar")
+    modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+}
+
+loom {
+    accessWidenerPath = file("src/main/resources/loadbearing.accesswidener")
+
+    // Minecraft 26.x ships unobfuscated: Mojang publishes no mappings for it and Fabric
+    // registers only a placeholder intermediary, so there is nothing to remap against.
+    noIntermediateMappings()
+
+    runs {
+        client {
+            client()
+        }
+        server {
+            server()
+            programArgs '--nogui'
+        }
+    }
+}
+
+processResources {
+    var replaceProperties = [
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            loader_version         : loader_version,
+            fabric_api_version     : fabric_api_version,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
+    ]
+    inputs.properties replaceProperties
+    filesMatching('fabric.mod.json') {
+        expand replaceProperties
+    }
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url = project.file("repo").toURI()
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(JavaExec).configureEach {
+    standardInput = System.in
+}
+
+idea {
+    module {
+        // Loom cannot remap the Fabric API sources jar on a target with no real mappings, and a
+        // sources download is only an IDE convenience.
+        downloadSources = false
+        downloadJavadoc = false
+    }
+}
