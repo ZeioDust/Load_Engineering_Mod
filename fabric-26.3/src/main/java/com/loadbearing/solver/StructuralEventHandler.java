@@ -1,0 +1,338 @@
+package com.loadbearing.solver;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import com.loadbearing.Config;
+import com.loadbearing.registry.LBAttachments;
+
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.piston.PistonStructureResolver;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.PushReaction;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+
+public final class StructuralEventHandler {
+    private static final int CAVERN_SEED = 3;
+
+    private StructuralEventHandler() {}
+
+    // Fabric API covers block breaking; placement, explosions and pistons arrive from
+    // mixins, which call the same handlers with the same arguments.
+    public static void register() {
+        PlayerBlockBreakEvents.AFTER.register(
+                (level, player, pos, state, blockEntity) ->
+                        onBlockBroken(level, pos, player));
+    }
+
+    public static void onBlockPlaced(LevelAccessor level, BlockPos pos, Entity placer) {
+        handlePlacement(level, pos, placer);
+    }
+
+    private static void onBlockBroken(Level level, BlockPos pos, Player player) {
+        if (!(level instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        forget(serverLevel, pos);
+
+        if (shouldSolveFor(player)) {
+            SolverScheduler.get().request(serverLevel, pos);
+        }
+    }
+
+    public static void onExplosionDetonate(ServerLevel level, List<BlockPos> affected) {
+        if (affected.isEmpty() || !Config.solverActive()) {
+            return;
+        }
+
+        for (BlockPos pos : affected) {
+            forget(level, pos);
+        }
+        solveAroundGaps(level, affected);
+    }
+
+    private static void solveAroundGaps(ServerLevel level, Collection<BlockPos> gaps) {
+        LongSet empty = new LongOpenHashSet(gaps.size());
+        for (BlockPos pos : gaps) {
+            empty.add(pos.asLong());
+        }
+        LongSet seeds = new LongOpenHashSet();
+        for (BlockPos pos : gaps) {
+            for (Direction direction : Direction.values()) {
+                BlockPos neighbour = pos.relative(direction);
+                if (empty.contains(neighbour.asLong()) || level.getBlockState(neighbour).isAir()) {
+                    continue;
+                }
+                seeds.add(neighbour.asLong());
+            }
+        }
+        for (long packed : seeds) {
+            SolverScheduler.get().request(level, BlockPos.of(packed));
+        }
+    }
+
+    private record PistonMove(Direction push, List<BlockPos> moved, List<BlockPos> destroyed) {}
+
+    private static final Map<Long, PistonMove> PENDING_PISTONS = new ConcurrentHashMap<>();
+
+    private static final int MAX_PENDING_PISTONS = 256;
+
+    public static void onPistonPre(net.minecraft.world.level.Level rawLevel,
+            BlockPos pistonPos, Direction facing, boolean extending) {
+        if (!(rawLevel instanceof ServerLevel level) || !Config.solverActive()) {
+            return;
+        }
+        List<BlockPos> moved = new ArrayList<>();
+        List<BlockPos> destroyed = new ArrayList<>();
+        Direction push;
+
+        if (extending) {
+            PistonStructureResolver resolver =
+                    new PistonStructureResolver(level, pistonPos, facing, true);
+            if (!resolver.resolve()) {
+                return;
+            }
+            push = resolver.getPushDirection();
+            for (BlockPos pos : resolver.getToPush()) {
+                moved.add(pos.immutable());
+            }
+            for (BlockPos pos : resolver.getToDestroy()) {
+                destroyed.add(pos.immutable());
+            }
+        } else {
+            push = facing.getOpposite();
+            if (!level.getBlockState(pistonPos).is(Blocks.STICKY_PISTON)) {
+                return;
+            }
+            BlockPos pulled = pistonPos.relative(facing, 2);
+            BlockState state = level.getBlockState(pulled);
+            if (state.isAir() || state.getPistonPushReaction() != PushReaction.PUSH_PULL) {
+                return;
+            }
+            moved.add(pulled.immutable());
+        }
+
+        if (moved.isEmpty() && destroyed.isEmpty()) {
+            return;
+        }
+        if (PENDING_PISTONS.size() > MAX_PENDING_PISTONS) {
+            PENDING_PISTONS.clear();
+        }
+        PENDING_PISTONS.put(pistonKey(level, pistonPos), new PistonMove(push, moved, destroyed));
+    }
+
+    public static void onPistonPost(net.minecraft.world.level.Level rawLevel,
+            BlockPos piston) {
+        if (!(rawLevel instanceof ServerLevel level)) {
+            return;
+        }
+        PistonMove move = PENDING_PISTONS.remove(pistonKey(level, piston));
+        if (move == null || !Config.solverActive()) {
+            return;
+        }
+
+        boolean[] wasPlaced = new boolean[move.moved().size()];
+        boolean[] wasGrouted = new boolean[move.moved().size()];
+        for (int i = 0; i < move.moved().size(); i++) {
+            BlockPos from = move.moved().get(i);
+            LevelChunk chunk = level.getChunkAt(from);
+            wasPlaced[i] = LBAttachments.placement(chunk).isPlayerPlaced(from);
+
+            wasGrouted[i] = LBAttachments.reinforcement(chunk).isReinforced(from);
+            forget(level, from);
+        }
+        for (BlockPos pos : move.destroyed()) {
+            forget(level, pos);
+        }
+
+        for (BlockPos pos : move.moved()) {
+            SolverScheduler.get().request(level, pos);
+        }
+        for (BlockPos pos : move.destroyed()) {
+            SolverScheduler.get().request(level, pos);
+        }
+        for (int i = 0; i < move.moved().size(); i++) {
+            BlockPos to = move.moved().get(i).relative(move.push());
+            if (wasPlaced[i]) {
+                markPlaced(level, to);
+            }
+            if (wasGrouted[i]) {
+                LevelChunk chunk = level.getChunkAt(to);
+                if (LBAttachments.reinforcement(chunk).reinforce(to)) {
+                    chunk.markUnsaved();
+                    ReinforcementSender.broadcastOne(level, to.immutable());
+                }
+            }
+            SolverScheduler.get().request(level, to);
+        }
+        SolverScheduler.get().request(level, piston);
+    }
+
+    private static long pistonKey(ServerLevel level, BlockPos pos) {
+        return pos.asLong() * 31L + level.dimension().identifier().hashCode();
+    }
+
+    public static void clearPistonState() {
+        PENDING_PISTONS.clear();
+    }
+
+    private static void handlePlacement(LevelAccessor accessor, BlockPos pos, Entity placer) {
+        if (!(accessor instanceof ServerLevel level)) {
+            return;
+        }
+
+        LevelChunk chunk = level.getChunkAt(pos);
+        ChunkReinforcementData reinforcement = LBAttachments.reinforcement(chunk);
+        if (reinforcement.isReinforced(pos)) {
+            reinforcement.clear(pos);
+            ReinforcementSender.broadcastOne(level, pos.immutable());
+        }
+        markPlaced(level, pos);
+        if (shouldSolveFor(placer)) {
+            SolverScheduler.get().request(level, pos);
+        }
+    }
+
+    private static boolean shouldSolveFor(Entity placer) {
+        if (!Config.solverActive()) {
+            return false;
+        }
+        if (placer instanceof Player player && player.isCreative() && !Config.appliesToCreative()) {
+            return false;
+        }
+        return true;
+    }
+
+    public static void markPlaced(ServerLevel level, BlockPos pos) {
+        LevelChunk chunk = level.getChunkAt(pos);
+        LBAttachments.placement(chunk).markPlaced(pos);
+        chunk.markUnsaved();
+        invalidateCacheAt(level, pos);
+    }
+
+    public static void forget(ServerLevel level, BlockPos pos) {
+        LevelChunk chunk = level.getChunkAt(pos);
+        ChunkPlacementData placement = LBAttachments.placement(chunk);
+
+        if (Config.TUNNEL_COLLAPSE.get() && !placement.isPlayerPlaced(pos)) {
+            disturbAround(level, pos);
+        }
+
+        placement.clearPlaced(pos);
+
+        ChunkReinforcementData reinforcement = LBAttachments.reinforcement(chunk);
+        if (reinforcement.isReinforced(pos)) {
+            reinforcement.clear(pos);
+            ReinforcementSender.broadcastOne(level, pos.immutable());
+        }
+
+        chunk.markUnsaved();
+        invalidateCacheAt(level, pos);
+    }
+
+    private static void disturbAround(ServerLevel level, BlockPos pos) {
+        LevelChunk here = level.getChunkAt(pos);
+        if (LBAttachments.disturbance(here).disturb(pos.immutable())) {
+            here.markUnsaved();
+        }
+        for (Direction direction : Direction.values()) {
+            disturb(level, pos.relative(direction));
+        }
+        if (level.getBlockState(pos.below()).isAir() && overWideVoid(level, pos)) {
+            for (BlockPos ceiling : ceilingWithin(level, pos, CAVERN_SEED)) {
+                disturb(level, ceiling);
+            }
+        }
+    }
+
+    private static void disturb(ServerLevel level, BlockPos pos) {
+        if (level.getBlockState(pos).isAir()) {
+            return;
+        }
+        LevelChunk chunk = level.getChunkAt(pos);
+        if (LBAttachments.placement(chunk).isPlayerPlaced(pos)) {
+            return;
+        }
+        if (LBAttachments.disturbance(chunk).disturb(pos.immutable())) {
+            chunk.markUnsaved();
+            invalidateCacheAt(level, pos);
+            SolverScheduler.get().request(level, pos.immutable());
+        }
+    }
+
+    private static boolean isCeiling(ServerLevel level, BlockPos pos) {
+        return !level.getBlockState(pos).isAir() && level.getBlockState(pos.below()).isAir();
+    }
+
+    private static boolean overWideVoid(ServerLevel level, BlockPos pos) {
+        LongSet seen = new LongOpenHashSet();
+        List<BlockPos> frontier = new ArrayList<>();
+        seen.add(pos.asLong());
+        frontier.add(pos.immutable());
+
+        for (int step = 0; step < Config.CAVERN_SPAN.get(); step++) {
+            List<BlockPos> next = new ArrayList<>();
+            for (BlockPos at : frontier) {
+                for (Direction direction : Direction.Plane.HORIZONTAL) {
+                    BlockPos side = at.relative(direction);
+                    if (!level.getBlockState(side).isAir() && !level.getBlockState(side.below()).isAir()) {
+                        return false;
+                    }
+                    if (isCeiling(level, side) && seen.add(side.asLong())) {
+                        next.add(side.immutable());
+                    }
+                }
+            }
+            if (next.isEmpty()) {
+                return false;
+            }
+            frontier = next;
+        }
+        return true;
+    }
+
+    private static List<BlockPos> ceilingWithin(ServerLevel level, BlockPos pos, int radius) {
+        LongSet seen = new LongOpenHashSet();
+        List<BlockPos> found = new ArrayList<>();
+        List<BlockPos> frontier = new ArrayList<>();
+        seen.add(pos.asLong());
+        frontier.add(pos.immutable());
+
+        for (int step = 0; step < radius; step++) {
+            List<BlockPos> next = new ArrayList<>();
+            for (BlockPos at : frontier) {
+                for (Direction direction : Direction.Plane.HORIZONTAL) {
+                    BlockPos side = at.relative(direction);
+                    if (isCeiling(level, side) && seen.add(side.asLong())) {
+                        found.add(side.immutable());
+                        next.add(side.immutable());
+                    }
+                }
+            }
+            frontier = next;
+        }
+        return found;
+    }
+
+    public static void invalidateCacheAt(ServerLevel level, BlockPos pos) {
+        LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
+        if (chunk != null) {
+            LBAttachments.solverCache(chunk).forget(pos.asLong());
+            LBAttachments.solverCache(chunk).bump();
+        }
+    }
+}
