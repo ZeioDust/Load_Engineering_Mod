@@ -1,0 +1,32 @@
+{
+  "display": {
+    "icon": {
+      "id": "minecraft:gravel"
+    },
+    "title": {
+      "translate": "advancements.loadbearing.it_did_not_hold.title"
+    },
+    "description": {
+      "translate": "advancements.loadbearing.it_did_not_hold.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "trigger": {
+      "trigger": "loadbearing:structural",
+      "conditions": {
+        "kind": "it_did_not_hold"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "trigger"
+    ]
+  ],
+  "sends_telemetry_event": false,
+  "parent": "loadbearing:root"
+}

@@ -1,0 +1,4 @@
+accessWidener	v2	named
+
+# Nothing needs widening on this version: the particle providers go through the
+# vanilla sprite provider rather than the constructor.

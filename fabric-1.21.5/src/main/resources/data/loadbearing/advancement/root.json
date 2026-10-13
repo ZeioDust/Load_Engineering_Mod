@@ -1,0 +1,20 @@
+{
+  "display": {
+    "icon": { "id": "loadbearing:reinforcing_grout" },
+    "title": { "translate": "advancements.loadbearing.root.title" },
+    "description": { "translate": "advancements.loadbearing.root.description" },
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": false,
+    "background": "minecraft:textures/block/stone.png"
+  },
+  "criteria": {
+    "has_grout": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": { "items": [ { "items": "loadbearing:reinforcing_grout" } ] }
+    }
+  },
+  "requirements": [ [ "has_grout" ] ],
+  "sends_telemetry_event": false
+}
