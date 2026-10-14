@@ -20,7 +20,7 @@ public abstract class BlockItemMixin {
             + "Lnet/minecraft/world/InteractionResult;", at = @At("RETURN"))
     private void loadbearing$afterPlace(BlockPlaceContext context,
             CallbackInfoReturnable<InteractionResult> callback) {
-        if (callback.getReturnValue() != InteractionResult.SUCCESS) {
+        if (!callback.getReturnValue().consumesAction()) {
             return;
         }
         StructuralEventHandler.onBlockPlaced(context.getLevel(), context.getClickedPos(),
