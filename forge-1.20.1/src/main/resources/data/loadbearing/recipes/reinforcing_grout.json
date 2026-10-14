@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GSG",
+    "SIS",
+    "GSG"
+  ],
+  "key": {
+    "G": {
+      "item": "minecraft:gravel"
+    },
+    "S": {
+      "item": "minecraft:sand"
+    },
+    "I": {
+      "item": "loadbearing:steel_ingot"
+    }
+  },
+  "result": {
+    "count": 4,
+    "item": "loadbearing:reinforcing_grout"
+  }
+}
